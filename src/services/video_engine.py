@@ -65,12 +65,26 @@ class ServiceManager:
 
         # Logic Text
         if font_path and os.path.exists(font_path):
-            esc_title = basename.replace("\\", "\\\\").replace(":", "\\:").replace("'", "'\\\\''")
-            fc += f"color=c=black@0:s=720x200,format=rgba[txt_canvas];"
-            fc += f"[txt_canvas]drawtext=fontfile='{font_path}':text='{esc_title}':fontcolor=white:fontsize=35:borderw=2:bordercolor=black:x=(W-tw)/2:y=(H-th)/2[txt_drawn];"
-            fc += f"[txt_drawn]crop=w='max(1, iw * (min(mod(t,20),2)/2))':h=ih:x=0:y=0[txt_wipe];"
-            fc += f"{last_stream}[txt_wipe]overlay=0:H-400:enable='lt(mod(t,20),5)',format=yuv420p[v_final]"
+            # 1. Xử lý đường dẫn Font cho chuẩn FFmpeg (Quan trọng trên Windows)
+            # Thay \ thành / và escape dấu : (Ví dụ C: -> C\:)
+            safe_font_path = font_path.replace("\\", "/").replace(":", "\\:")
+            
+            # 2. Xử lý tên bài hát (Bỏ dấu ' để tránh lỗi lệnh)
+            esc_title = basename.replace(":", "\\:").replace("'", "")
+            
+            # 3. Vẽ chữ (Bỏ enable để đảm bảo chạy ổn định 100%)
+            # Tạo luồng [v_txt] riêng biệt
+            fc += (
+                f"{last_stream}drawtext=fontfile='{safe_font_path}':"
+                f"text='{esc_title}':"
+                f"fontcolor=white:fontsize=45:borderw=2:bordercolor=black:"
+                f"x=(w-text_w)/2:y=h-250[v_txt];"
+            )
+            
+            # 4. Format màu ở bước cuối cùng
+            fc += f"[v_txt]format=yuv420p[v_final]"
         else:
+            # Không có font
             fc += f"{last_stream}format=yuv420p[v_final]"
 
         cmd = [
