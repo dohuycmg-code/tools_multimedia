@@ -74,18 +74,20 @@ class ServiceManager:
             
             # 3. Vẽ chữ (Bỏ enable để đảm bảo chạy ổn định 100%)
             # Tạo luồng [v_txt] riêng biệt
+            fc += f"color=c=black@0:s=720x200,format=rgba[txt_canvas];"
             fc += (
-                f"{last_stream}drawtext=fontfile='{safe_font_path}':"
-                f"text='{esc_title}':"
-                f"fontcolor=white:fontsize=45:borderw=2:bordercolor=black:"
-                f"x=(w-text_w)/2:y=h-250[v_txt];"
+                f"[txt_canvas]drawtext=fontfile='{safe_font_path}':text='{esc_title}':"
+                "fontcolor=white:fontsize=35:borderw=2:bordercolor=black:"
+                "x=(W-tw)/2:y=(H-th)/2[txt_drawn];"
             )
-            
-            # 4. Format màu ở bước cuối cùng
-            fc += f"[v_txt]format=yuv420p[v_final]"
+            fc += (
+                f"[txt_drawn]crop=w='max(1, iw * (min(mod(t,20),2)/2))':h=ih:x=0:y=0[txt_wipe];"
+            )
+            fc += f"{last_stream}[txt_wipe]overlay=0:H-400:enable='lt(mod(t,20),5)',format=yuv420p[v_final]"
+            last_stream = "[v_final]"
         else:
-            # Không có font
             fc += f"{last_stream}format=yuv420p[v_final]"
+            last_stream = "[v_final]"
 
         cmd = [
             ffmpeg_cmd, '-y', *inputs, '-filter_complex', fc,
