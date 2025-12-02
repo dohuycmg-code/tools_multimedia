@@ -6,6 +6,10 @@ import time
 import urllib.parse
 import logging
 import sys
+from google import genai
+import google.generativeai as genai
+from google.genai import types
+from io import BytesIO
 
 # Dùng logging chuẩn
 logger = logging.getLogger(__name__)
@@ -20,12 +24,43 @@ class ServiceManager:
 
     @staticmethod
     def gen_gemini(api_key, prompt):
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key={api_key}"
-        res = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseModalities": ["IMAGE"]}}, headers={'Content-Type': 'application/json'})
-        if res.status_code != 200:
-            logging.error(f"Gemini API Error: {res.text}")
-            raise Exception("Gemini Error")
-        return base64.b64decode(res.json()['candidates'][0]['content']['parts'][0]['inlineData']['data'])
+        try:
+            # Khởi tạo Client với API Key
+            client = genai.Client(api_key=api_key)
+            if not prompt:
+                    # Fallback nếu người dùng xóa hết text
+                    prompt = "Create a highly detailed, photorealistic, vertical (9:16) image prompt in English describing a musical artist whose appearance and atmospheric surroundings visually metaphorize the mood of the song title: '{title}'. "
+                
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            prompt_query = prompt.replace("{title}")
+            res = model.generate_content(prompt_query)
+            prompt = res.text.strip()
+            
+            # Gọi model tạo ảnh
+            response = client.models.generate_images(
+                model='imagen-4.0-fast-generate-001', 
+                prompt=prompt,
+                config=types.GenerateImagesConfig(
+                    number_of_images=1, # Chỉ lấy 1 ảnh để giống logic cũ
+                    aspect_ratio="1:1"  # Tùy chỉnh tỉ lệ nếu cần
+                )
+            )
+
+            # Kiểm tra và xử lý kết quả
+            if response.generated_images:
+                # Lấy ảnh đầu tiên (dạng PIL.Image)
+                pil_image = response.generated_images[0].image
+                
+                # Chuyển đổi PIL Image thành bytes để tương thích với code ghi file cũ của bạn
+                img_byte_arr = BytesIO()
+                pil_image.save(img_byte_arr, format='PNG')
+                return img_byte_arr.getvalue()
+            else:
+                raise Exception("No image returned from API")
+
+        except Exception as e:
+            logging.error(f"GenAI SDK Error: {e}")
+            raise
 
     @staticmethod
     def render_video(img_path, audio_path, out_path, active_effects, font_path):
